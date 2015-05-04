@@ -9,10 +9,25 @@
     <link rel="stylesheet" href="dist/leaflet.css" />
 </head>
 <body>
-<div id="map" style="width: 600px; height: 600px"></div>
-
-<button style="float:right" onclick="togglePlay()">start/stop</button>
-
+<div style="position:relative;">
+    <div id="map" style="width: 600px; height: 400px"></div>
+    <div 
+        style="position:absolute; 
+                top:0px; 
+                left:600px; 
+                height: 400px; 
+                line-height: 400px; 
+                width:200px; 
+                background-color:#D69380; 
+                color:#55227F; 
+                text-align: center;  
+                font-size: 24px;
+                font-family: 'Helvetica Neue', Arial, Helvetica, sans-serif;
+                font-weight:bold" 
+        onclick="togglePlay()">
+        start&nbsp;/&nbsp;stop
+    </div>
+</div>
 <script src="dist/leaflet-src.js"></script>
 <script>
 
