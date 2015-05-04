@@ -1,5 +1,5 @@
 /*
- Leaflet 0.8-dev (a6b133d), a JS library for interactive maps. http://leafletjs.com
+ Leaflet 0.8-dev (cc2701f), a JS library for interactive maps. http://leafletjs.com
  (c) 2010-2015 Vladimir Agafonkin, (c) 2010-2011 CloudMade
 */
 (function (window, document, undefined) {
@@ -1025,8 +1025,22 @@ L.DomUtil = {
 	setTransform: function (el, offset, scale) {
 		var pos = offset || new L.Point(0, 0);
 
+		var transform = el.style[L.DomUtil.TRANSFORM];
+		transform = transform.replace(/[ ]*translate3d[(][^)]*[)]/i, '') + ' translate3d(' + pos.x + 'px,' + pos.y + 'px' + ',0)';
+		transform = transform.replace(/[ ]*scale[(][^)]*[)]/i, '') + (scale ? ' scale(' + scale + ')' : '');
+		el.style[L.DomUtil.TRANSFORM] = transform;
+	},
+
+	setRotation: function (el, rotation, center) {
 		el.style[L.DomUtil.TRANSFORM] =
-			'translate3d(' + pos.x + 'px,' + pos.y + 'px' + ',0)' + (scale ? ' scale(' + scale + ')' : '');
+			el.style[L.DomUtil.TRANSFORM]
+				.replace(/[ ]*rotate[(][^)]*[)]/i, '') + (rotation ? ' rotate(' + rotation.toFixed(4) + 'rad)' : '');
+
+		if (center === undefined) {
+			center = new L.Point(el.clientWidth, el.clientHeight).divideBy(2);
+		}
+
+		el.style['transform-origin'] = (center.x) + 'px ' + (center.y) + 'px 0';
 	},
 
 	setPosition: function (el, point, no3d) { // (HTMLElement, Point[, Boolean])
@@ -1596,6 +1610,8 @@ L.Map = L.Evented.extend({
 
 		if (options.rotation !== undefined) {
 			this._rotation = options.rotation;
+		} else {
+			this._rotation = 0;
 		}
 
 		if (options.zoom !== undefined) {
@@ -1628,9 +1644,7 @@ L.Map = L.Evented.extend({
 
 	setRotation: function (rotation) {
 		this._rotation = rotation;
-
-		this._mapPane.style.transform = 'rotate(30deg)';
-
+		this._resetView(this.getCenter(), this.getZoom());
 		return this;
 	},
 
@@ -2113,6 +2127,8 @@ L.Map = L.Evented.extend({
 		if (!preserveMapOffset) {
 			L.DomUtil.setPosition(this._mapPane, new L.Point(0, 0));
 		}
+
+		L.DomUtil.setRotation(this._mapPane, this.getRotation(), this.getSize().divideBy(2));
 
 		this._pixelOrigin = this._getNewPixelOrigin(center);
 
@@ -3914,10 +3930,18 @@ L.Marker = L.Layer.extend({
 	},
 
 	_setPos: function (pos) {
+		var offset;
+		if (this.options.icon !== undefined && this.options.icon.options !== undefined && this.options.icon.options.iconAnchor !== undefined) {
+			offset = new L.Point(this.options.icon.options.iconAnchor[0], this.options.icon.options.iconAnchor[1]);
+		} else {
+			offset = new L.Point(0, 0);
+		}
 		L.DomUtil.setPosition(this._icon, pos);
+		L.DomUtil.setRotation(this._icon, -1 * this._map.getRotation(), offset);
 
 		if (this._shadow) {
 			L.DomUtil.setPosition(this._shadow, pos);
+			L.DomUtil.setRotation(this._shadow, -1 * this._map.getRotation(), offset);
 		}
 
 		this._zIndex = pos.y + this.options.zIndexOffset;
@@ -4269,6 +4293,24 @@ L.Popup = L.Layer.extend({
 		// bottom position the popup in case the height of the popup changes (images loading etc)
 		this._container.style.bottom = bottom + 'px';
 		this._container.style.left = left + 'px';
+
+		this._updateRotation();
+	},
+
+	_updateRotation: function () {
+		if (!this._map) { return; }
+
+		var pos = this._map.latLngToLayerPoint(this._latlng),
+			offset = L.point(this.options.offset);
+
+		if (!this._zoomAnimated) {
+			offset = offset.add(pos);
+		}
+
+		var bottom = this._containerBottom = -offset.y,
+			left = this._containerLeft = (this._containerWidth / 2) + offset.x;
+
+		L.DomUtil.setRotation(this._container, -1 * this._map.getRotation(), new L.Point(left, this._container.clientHeight + bottom));
 	},
 
 	_animateZoom: function (e) {
@@ -4741,10 +4783,13 @@ L.Renderer = L.Layer.extend({
 	},
 
 	_update: function () {
+		//TODO: calculate rotationPadding based off of rotation to minimize memory size
 		// update pixel bounds of renderer container (for positioning/sizing/clipping later)
-		var p = this.options.padding,
-		    size = this._map.getSize(),
-		    min = this._map.containerPointToLayerPoint(size.multiplyBy(-p)).round();
+		var size = this._map.getSize(),
+			sizeHypotenuse = Math.sqrt(size.x * size.x + size.y * size.y),
+			rotationPadding = (sizeHypotenuse - Math.min(size.x, size.y)) / sizeHypotenuse,
+			p = this.options.padding + rotationPadding,
+			min = this._map.containerPointToLayerPoint(size.multiplyBy(-p)).round();
 
 		this._bounds = new L.Bounds(min, min.add(size.multiplyBy(1 + p * 2)).round());
 	}
